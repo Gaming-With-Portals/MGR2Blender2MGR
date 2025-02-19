@@ -936,7 +936,7 @@ def import_unknowWorldDataArray(wmb):
 
 def load_mysterychunk(chunk, collection_name):
     col = bpy.data.collections.new("looseCoords")
-    bpy.context.scene.collection.children.link(col)
+    #bpy.context.scene.collection.children.link(col)
     print("Processing mystery chunk!")
     def mset(name, val): # short for mystery should rename
         bpy.data.collections["WMB"][name] = val # formerly collection name
@@ -1100,11 +1100,39 @@ def load_mysterychunk(chunk, collection_name):
     print(min(myList), max(myList), myList)
     print("\n\n")
 
-def main(only_extract = False, wmb_file = os.path.join(os.path.split(os.path.realpath(__file__))[0], 'test', 'pl0000.dtt', 'pl0000.wmb'), wmb4_transform = None):
+def get_child_collection(parent, child_name):
+    for child in parent.children:
+        if child.name == child_name:
+            return child
+    return None
+
+def get_nested_collection(root, path):
+    current_collection = root
+    
+    for name in path:
+        # Check if the current collection has the child
+        found = None
+        for child in current_collection.children:
+            if child.name == name:
+                found = child
+                break
+        
+        if found:
+            current_collection = found  # Move deeper into the hierarchy
+        else:
+            # Create a new collection if it doesn't exist
+            new_collection = bpy.data.collections.new(name)
+            current_collection.children.link(new_collection)
+            current_collection = new_collection
+
+    return current_collection
+
+def main(only_extract = False, wmb_file = os.path.join(os.path.split(os.path.realpath(__file__))[0], 'test', 'pl0000.dtt', 'pl0000.wmb'), wmb4_transform = None, scr_mode=False, scr_name="SCR", mode_switch="", ly2_path=None):
     #reset_blend()
     wmb = WMB(wmb_file, only_extract)
     wmbname = os.path.split(wmb_file)[-1] # Split only splits into head and tail, but since we want the last part, we don't need to split the head with wmb_file.split(os.sep)
     wmb4 = wmb.wmb_header.magicNumber == b'WMB4'
+    targetCollection = None
     
     if only_extract:
         texture_dir = wmb_file.replace(wmbname, 'textures')
@@ -1115,8 +1143,28 @@ def main(only_extract = False, wmb_file = os.path.join(os.path.split(os.path.rea
     wmbCollection = bpy.data.collections.get("WMB")
     if not wmbCollection:
         wmbCollection = bpy.data.collections.new("WMB")
-        bpy.context.scene.collection.children.link(wmbCollection)
 
+        bpy.context.scene.collection.children.link(wmbCollection)
+    if scr_mode:
+        scr_name = scr_name + "_SCR"
+        targetCollection = get_child_collection(wmbCollection, scr_name)
+        if (targetCollection == None):
+            targetCollection = bpy.data.collections.new(scr_name)
+            wmbCollection.children.link(targetCollection) 
+            print("SCR Collection made.")
+            
+    
+
+    
+    if mode_switch == "LY2":
+        ly2_collection_path = ["WMB", ly2_path + "_LY2"]
+        targetCollection = get_nested_collection(bpy.context.scene.collection, ly2_collection_path)
+        print("LY2 Collection made.")
+    
+            
+    if scr_mode == False and mode_switch == "":
+        targetCollection=wmbCollection
+    
     collection_name = wmbname[:-4]
     if bpy.data.collections.get(collection_name): # oops, duplicate
         collection_suffix = 1
@@ -1127,7 +1175,7 @@ def main(only_extract = False, wmb_file = os.path.join(os.path.split(os.path.rea
             collection_suffix += 1
     col = bpy.data.collections.new(collection_name)
     
-    wmbCollection.children.link(col)
+    targetCollection.children.link(col)
     #bpy.context.view_layer.active_layer_collection = bpy.context.view_layer.layer_collection.children[-1]
     
     texture_dir = wmb_file.replace(wmbname, 'textures')

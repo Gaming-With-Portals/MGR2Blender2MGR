@@ -8,10 +8,33 @@ import shutil
 from ...wmb.importer import wmb_importer  # Assuming wmb_importer.py is in root/wmb/importer
 from ...dat_dtt.importer import datImportOperator
 
+def get_nested_collection(root, path):
+    current_collection = root
+    
+    for name in path:
+        # Check if the current collection has the child
+        found = None
+        for child in current_collection.children:
+            if child.name == name:
+                found = child
+                break
+        
+        if found:
+            current_collection = found  # Move deeper into the hierarchy
+        else:
+            # Create a new collection if it doesn't exist
+            new_collection = bpy.data.collections.new(name)
+            current_collection.children.link(new_collection)
+            current_collection = new_collection
+
+    return current_collection
+
+
 class ImportSCR:
     def main(file_path, context):
         print('Beginning export')
         #print(file_path, context)
+        collectionName = os.path.splitext(os.path.basename(file_path))[0]
         trueFilePath = file_path # thanks for the var reuse
         head = os.path.split(file_path)[0]
         if os.path.exists(file_path): # not always
@@ -59,7 +82,7 @@ class ImportSCR:
                     print('SCR extract completed')
                     if not (context):
                         print('Beginning WMB import')                    
-                        ImportSCR.import_models(file_path, model_header)  
+                        ImportSCR.import_models(file_path, model_header, collectionName)  
                         
                 print('SCR extract completed')
         
@@ -74,8 +97,8 @@ class ImportSCR:
             print("Loading props")
             
             (ly2Flags, propTypeCount, ly2MysteryPointer, ly2MysteryCount) = struct.unpack("<IIII", ly2.read(16))
-            
-            bpy.data.collections["WMB"]["ly2Flags"] = ly2Flags
+            ly2Collection = get_nested_collection(bpy.context.scene.collection, ["WMB", collectionName + "_LY2"])
+            ly2Collection["ly2Flags"] = ly2Flags
             
             for i in range(propTypeCount):
                 instanceFlags = list(struct.unpack("<II", ly2.read(8)))
@@ -113,10 +136,11 @@ class ImportSCR:
                     ly2.read(8)
                     rotY *= 3.1415926535 / 0x80
                     prop_transform = [posX, posY, posZ, rotX, rotY, rotZ, scaleX, scaleY, scaleZ]
+                    print("Importing LY2 Object: The mode is " + import_mode)
                     if import_mode == "dtt":
-                        datImportOperator.importDtt(False, prop_path, prop_transform)
+                        datImportOperator.ImportData(False, prop_path, prop_transform, importMode="LY2", extraImportData=collectionName)
                     elif import_mode == "wmb":
-                        wmb_importer.main(False, prop_path, prop_transform)
+                        wmb_importer.main(False, prop_path, prop_transform, ly2_mode=True, ly2_path=collectionName)
                     elif import_mode == "none":
                         #print(" Loading empty model %s" % prop_name)
                         target = bpy.data.objects.new(prop_name, None)
@@ -124,7 +148,7 @@ class ImportSCR:
                         target.rotation_euler = [rotX + math.radians(90), rotZ, rotY]
                         target.scale = [scaleX, scaleZ, scaleY]
                         newCol = bpy.data.collections.new(prop_name)
-                        bpy.data.collections["WMB"].children.link(newCol)
+                        ly2Collection.children.link(newCol)
                         newCol.objects.link(target)
                     
                     if j == 0:
@@ -146,17 +170,18 @@ class ImportSCR:
                 ly2MysteryB.append(struct.unpack("<I", ly2.read(4))[0])
                 ly2MysteryC.append(struct.unpack("<I", ly2.read(4))[0])
             
-            bpy.data.collections["WMB"]["ly2OtherFlags"] = ly2OtherFlags
-            bpy.data.collections["WMB"]["ly2MysteryB"] = ly2MysteryB
-            bpy.data.collections["WMB"]["ly2MysteryC"] = ly2MysteryC
+            ly2Collection["ly2OtherFlags"] = ly2OtherFlags
+            ly2Collection["ly2MysteryB"] = ly2MysteryB
+            ly2Collection["ly2MysteryC"] = ly2MysteryC
             
             ly2.close()
         
         return {'FINISHED'}
 
     @staticmethod
-    def import_models(file_path, scr_header):
-        wmb_importer.main(False, file_path, scr_header[2:11])
+    def import_models(file_path, scr_header, scr_fname):
+        print("Importing SCR Model: " + scr_fname)
+        wmb_importer.main(False, file_path, scr_header[2:11], True, scr_fname)
         # TODO this is out of place, integrate with wmb if possible
         name = scr_header[1].decode('utf-8').rstrip('\x00')
         bpy.data.collections[name]["mystery_int16s"] = scr_header[11:]

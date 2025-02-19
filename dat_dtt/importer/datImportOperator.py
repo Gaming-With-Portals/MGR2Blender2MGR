@@ -12,7 +12,7 @@ from ...col.exporter.col_ui_manager import enableCollisionTools
 from ...utils.visibilitySwitcher import enableVisibilitySelector
 from ...utils.util import setExportFieldsFromImportFile, ShowMessageBox
 
-def ImportData(only_extract, filepath, transform=None):
+def ImportData(only_extract, filepath, transform=None, importMode="", extraImportData=""):
     print("Importing data...")
     extension = os.path.splitext(filepath)[1]
     
@@ -108,8 +108,6 @@ def ImportData(only_extract, filepath, transform=None):
 
     setExportFieldsFromImportFile(filepath, True)
     enableVisibilitySelector()
-    
-    
 
     if scr_mode:
         # SCR but new and improved
@@ -126,7 +124,9 @@ def ImportData(only_extract, filepath, transform=None):
         wmb_filepath = os.path.join(extract_dir, filename_without_extension + wmb_ext, wmb_files[0])
         print("WMB Path: " + wmb_filepath)
         from ...wmb.importer import wmb_importer
-        wmb_importer.main(only_extract, wmb_filepath, transform)
+        
+        
+        wmb_importer.main(only_extract, wmb_filepath, transform, mode_switch=importMode, ly2_path=extraImportData)
     
     
     
