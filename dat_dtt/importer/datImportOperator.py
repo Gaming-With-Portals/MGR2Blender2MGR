@@ -5,7 +5,6 @@ from bpy.props import StringProperty
 from bpy_extras.io_utils import ImportHelper
 
 # Add this import statement at the top of the file
-from ...scr.importer import scr_importer
 
 from ...consts import DAT_EXTENSIONS
 from ...utils.visibilitySwitcher import enableVisibilitySelector

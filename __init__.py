@@ -22,19 +22,13 @@ from .mot.exporter.motExportOperator import ExportNierMot
 from .mot.importer.motImportOperator import ImportNierMot
 from .mot.common.motUtils import getArmatureObject
 from .mot.common.pl000fChecks import HidePl000fIrrelevantBones, RemovePl000fIrrelevantAnimations
-from .wmb.exporter.wmbExportOperator import ExportMGRRWmb
-from .wmb.exporter.wmbMaterialJSON import *
-from .wmb.importer.wmbImportOperator import ImportNierWmb
-from .scr.importer.scrImportOperator import ImportSCR
-from .scr.exporter.scrExportOperator import ExportSCR
 from .wta_wtp.importer.wtpImportOperator import ExtractNierWtaWtp
 from .bxm.importer import physPanel
 from .bxm.importer import gadImporter
-from .wmb.materials import materialUI
 from .hkx.importer import hkxImportOperator
 from .path.importer import pathImportOperator
 from .path.exporter import pathExportOperator
-from .wmb import wmb_builder
+from .wmb import wmbImportOperator
 
 class NierObjectMenu(bpy.types.Menu):
     bl_idname = 'OBJECT_MT_n2b2n'
@@ -48,7 +42,7 @@ class NierObjectMenu(bpy.types.Menu):
         self.layout.operator(DeleteLooseGeometryAll.bl_idname, icon="EDITMODE_HLT")
         self.layout.operator(RipMeshByUVIslands.bl_idname, icon="UV_ISLANDSEL")
         self.layout.operator(RestoreImportPose.bl_idname, icon='OUTLINER_OB_ARMATURE')
-        self.layout.operator(wmb_builder.MakeNewWMB.bl_idname, icon='CUBE')
+        #self.layout.operator(wmb_builder.MakeNewWMB.bl_idname, icon='CUBE')
         self.layout.operator()
         
         armature = getArmatureObject()
@@ -82,8 +76,8 @@ class IMPORT_MGR_MainMenu(bpy.types.Menu):
         
         # self.layout.menu(IMPORT_MGR_HKXMenu.bl_idname, icon_value=pcoll["raiden"].icon_id)    
         self.layout.operator(ImportNierDat.bl_idname, text="Archive File (.dat, .dtt)", icon_value=raiden_icon.icon_id)
-        self.layout.operator(ImportNierWmb.bl_idname, text="Model File (.wmb)", icon_value=raiden_icon.icon_id)
-        self.layout.operator(ImportSCR.bl_idname, text="Stage/Level File (.scr)", icon_value=raiden_icon.icon_id)
+        self.layout.operator(wmbImportOperator.ImportMGRRWmb.bl_idname, text="Model File (.wmb)", icon_value=raiden_icon.icon_id)
+        #self.layout.operator(ImportSCR.bl_idname, text="Stage/Level File (.scr)", icon_value=raiden_icon.icon_id)
         self.layout.operator(ImportNierMot.bl_idname, text="Animation (Motion) File (.mot)", icon_value=raiden_icon.icon_id)
         self.layout.operator(ExtractNierWtaWtp.bl_idname, text="Extract Textures (.wta, .wtp)", icon_value=raiden_icon.icon_id)
         self.layout.operator(gadImporter.ImportMGRGad.bl_idname, text="Lighting Information (.gad)", icon_value=raiden_icon.icon_id)
@@ -95,8 +89,8 @@ class EXPORT_MGR_MainMenu(bpy.types.Menu):
     def draw(self, context):
         pcoll = preview_collections["main"]
         raiden_icon = pcoll["raiden"] 
-        self.layout.operator(ExportMGRRWmb.bl_idname, text="Model File (.wmb)", icon_value=raiden_icon.icon_id)
-        self.layout.operator(ExportSCR.bl_idname, text="Stage/Level File (.scr)", icon_value=raiden_icon.icon_id)
+        #self.layout.operator(ExportMGRRWmb.bl_idname, text="Model File (.wmb)", icon_value=raiden_icon.icon_id)
+        #self.layout.operator(ExportSCR.bl_idname, text="Stage/Level File (.scr)", icon_value=raiden_icon.icon_id)
         self.layout.operator(ExportNierMot.bl_idname, text="Animation (Motion) File (.mot)", icon_value=raiden_icon.icon_id)
         # self.layout.operator(pathExportOperator.ExportMGRPath.bl_idname, text="Pathfinding Data (.bin)", icon_value=raiden_icon.icon_id)
 
@@ -130,14 +124,14 @@ def menu_func_editbone_utils(self, context):
     self.layout.menu(NierArmatureMenu.bl_idname, icon_value=yorha_icon.icon_id)
 
 classes = (
-    ImportNierWmb,
-    ImportSCR,
+    #ImportNierWmb,
+    #ImportSCR,
     ImportNierDtt,
     ImportNierDat,
     ImportNierMot,
 
-    ExportMGRRWmb,
-    ExportSCR,
+    wmbImportOperator.ImportMGRRWmb,
+    #ExportSCR,
     ExportNierMot,
     ExtractNierWtaWtp,
     
@@ -154,11 +148,11 @@ classes = (
     HidePl000fIrrelevantBones,
     RemovePl000fIrrelevantAnimations,
     
-    WMBMaterialToJSON,
-    WMBMaterialFromJSON,
-    WMBCopyMaterialJSON,
-    WMBPasteMaterialJSON,
-    WMBMaterialJSONPanel,
+    #WMBMaterialToJSON,
+    #WMBMaterialFromJSON,
+    #WMBCopyMaterialJSON,
+    #WMBPasteMaterialJSON,
+    #WMBMaterialJSONPanel,
 
     gadImporter.ImportMGRGad,
     
@@ -168,7 +162,7 @@ classes = (
     pathImportOperator.ImportMGRPath,
     pathExportOperator.ExportMGRPath,
 
-    wmb_builder.MakeNewWMB
+    #wmb_builder.MakeNewWMB
     
     
 )
@@ -188,7 +182,7 @@ def register():
     bpy.utils.register_class(MGRVector4Property)
     for cls in classes:
         bpy.utils.register_class(cls)
-    materialUI.register()
+    #materialUI.register()
     bpy.utils.register_class(IMPORT_MGR_MainMenu)
     bpy.utils.register_class(IMPORT_MGR_HKXMenu)
     bpy.utils.register_class(EXPORT_MGR_MainMenu)
@@ -212,11 +206,11 @@ def register():
     bpy.app.handlers.load_post.append(checkCustomPanelsEnableDisable)
     bpy.app.handlers.depsgraph_update_post.append(initialCheckCustomPanelsEnableDisable)
 
-    bpy.types.Scene.selected_material = bpy.props.EnumProperty(
-        name="Copy From Existing Material",
-        description="Select a material",
-        items=get_materials
-    )
+    ##bpy.types.Scene.selected_material = bpy.props.EnumProperty(
+    ##    name="Copy From Existing Material",
+    ##    description="Select a material",
+    ##    items=get_materials
+    ##)
 
 def unregister():
     for pcoll in preview_collections.values():
@@ -226,7 +220,7 @@ def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
 
-    materialUI.unregister()
+    ##materialUI.unregister()
     bpy.utils.unregister_class(IMPORT_MGR_MainMenu)
     bpy.utils.unregister_class(EXPORT_MGR_MainMenu)
     wta_wtp_ui_manager.unregister()
