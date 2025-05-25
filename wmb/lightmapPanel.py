@@ -9,7 +9,7 @@ class B2MMakeLightmaps(bpy.types.Operator):
         scene = context.scene
         scene.render.engine = 'CYCLES'
         scene.cycles.bake_type = 'COMBINED'
-        scene.cycles.samples = 128
+        scene.cycles.samples = 512
 
         prefs = bpy.context.preferences
         cprefs = prefs.addons['cycles'].preferences
