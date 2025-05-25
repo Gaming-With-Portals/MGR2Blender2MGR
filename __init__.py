@@ -170,7 +170,7 @@ classes = (
     pathExportOperator.ExportMGRPath,
 
     wmb_builder.MakeNewWMB,
-    #lightmapPanel.B2MLightmapEditor,
+    lightmapPanel.B2MLightmapEditor,
     lightmapPanel.B2MMakeLightmaps
     
     

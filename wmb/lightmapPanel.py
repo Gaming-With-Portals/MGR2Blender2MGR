@@ -9,53 +9,95 @@ class B2MMakeLightmaps(bpy.types.Operator):
         scene = context.scene
         scene.render.engine = 'CYCLES'
         scene.cycles.bake_type = 'COMBINED'
-        scene.cycles.samples = 64
-
-        scene.render.bake.use_pass_direct = True
-        scene.render.bake.use_pass_indirect = True
-        scene.render.bake.use_pass_diffuse = True
-        scene.render.bake.margin = 4
+        scene.cycles.samples = 128
 
         prefs = bpy.context.preferences
         cprefs = prefs.addons['cycles'].preferences
         cprefs.compute_device_type = 'CUDA'  # or 'OPTIX' or 'METAL'
-        for device in cprefs.devices:
-            device.use = True
         scene.cycles.device = 'GPU'
+
 
         baked_count = 0
         print("LIGHTMAP BAKE START!")
-        print("(C) GAMING WITH PORTALS - 2025")
         triedCount = 0
         meshCount = 0
         for col in bpy.data.collections.get("WMB").children:
             for obj in col.objects:
                 if (obj.type == 'MESH'):
                     meshCount+=1
+        for col in bpy.data.collections.get("WMB").children:
+            for obj in col.objects:
+                if (obj.type != 'MESH'):
+                    continue
+                else:
+                    name = obj.name
+                    bpy.ops.object.select_all(action='DESELECT')
+                    obj.select_set(True)
 
+                    img = bpy.data.images.get(obj.name + "_lmap")
+                    if img:
+                        bpy.data.images.remove(img)
 
         for col in bpy.data.collections.get("WMB").children:
             for obj in col.objects:
                 if (obj.type != 'MESH'):
                     continue
                 else:
+                    if ("ba" in obj.name or "bh" in obj.name or "bm" in obj.name):
+                        continue
+                    bpy.ops.object.select_all(action='DESELECT')
+                    obj.select_set(True)
                     bpy.context.view_layer.objects.active = obj
                     mat = obj.active_material
+                    
                     nodes = mat.node_tree.nodes
-                    image_node = None
-                    for node in nodes:
-                        if node.type == 'TEX_IMAGE' and "lightmap" in node.name.lower():
-                            image_node = node
-                            break
-                    nodes.active = image_node
+                    links = mat.node_tree.links
+                    print(f"-- {obj.name} --")
 
-                    print("Baking: " + obj.name + " (" + str(triedCount) + "/" + str(meshCount) + "..." + str((triedCount / meshCount) * 100.0) + "%)")
-                    triedCount+=1
-                    try:
-                        bpy.ops.object.bake(type='COMBINED')
-                        baked_count += 1
-                    except Exception as e:
-                        self.report({'ERROR'}, f"Bake failed on {obj.name}: {e}")
+                    lightmap_uv_node = None
+
+                    for node in nodes:
+                        if node.label == "LightMap UV":
+                            lightmap_uv_node = node
+
+                    if lightmap_uv_node is None:
+                        continue
+
+
+                    image = bpy.data.images.new(obj.name + "_lmap", width=2048, height=2048)
+                    image.generated_color = (0, 0, 0, 0)
+                    image.filepath_raw = f"E:/Textures/" + obj.name + "_lmap.png"
+                    image.file_format = 'PNG'
+                    image.save()
+
+                    # Create or reuse the bake image node
+                    bake_node = None
+                    for node in nodes:
+                        node.select = False
+                        if node.type == 'ShaderNodeTexImage' and node.image == image:
+                            bake_node = node
+                            break
+                    if not bake_node:
+                        bake_node = nodes.new(type='ShaderNodeTexImage')
+                        bake_node.name = "TempBake"
+                        bake_node.label = "TempBake"
+                        bake_node.image = image
+                        links.new(lightmap_uv_node.outputs['UV'], bake_node.inputs['Vector'])
+
+                    bake_node.select = True
+                    nodes.active = bake_node
+                    
+
+                    bpy.ops.object.select_all(action='DESELECT')
+                    obj.select_set(True)
+                    bpy.context.view_layer.objects.active = obj 
+                    # Perform the bake
+                    bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT','INDIRECT'}, uv_layer="LightMap", margin=0, use_clear=False, use_selected_to_active=False)
+                    image.save()
+
+                    print(f"Baking: {obj.name} ({triedCount}/{meshCount}...{(triedCount / meshCount) * 100.0:.2f}%)")
+                    triedCount += 1
+
 
         self.report({'INFO'}, f"Rebaked lightmaps on {baked_count} objects.")
         return {'FINISHED'}
