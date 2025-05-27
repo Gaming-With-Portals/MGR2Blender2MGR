@@ -1154,6 +1154,15 @@ class c_vertexGroup(object):
                 objOwner.data.uv_layers.new()
             uv_coords = objOwner.data.uv_layers[uvSlot].data[loopIndex].uv
             return [uv_coords.x, 1-uv_coords.y]
+        
+        def get_blenderUVCoordsEx(self, objOwner, loopIndex, uvName):
+            uv_layers = objOwner.data.uv_layers
+
+            if uvName not in uv_layers:
+                return None
+
+            uv_coords = uv_layers[uvName].data[loopIndex].uv
+            return [uv_coords.x, 1 - uv_coords.y]
 
         # Has bones = TODO: new listing for these
         
@@ -1270,14 +1279,15 @@ class c_vertexGroup(object):
                         nz ^= 1 << 9
                     normal = nx | (ny << 11) | (nz << 22)
                         
-                    # UVs
-                    uv_maps = []
 
-                    uv1 = get_blenderUVCoords(self, bvertex_obj_obj, loop.index, 0)
+                    # Whats up guys its gaming with portals, and for my next trick I add named UVs
+                    # UV
+                    uv_maps = []
+                    uv1 = get_blenderUVCoordsEx(self, bvertex_obj_obj, loop.index, "UVMap1")
                     uv_maps.append(uv1)
                     
                     if vertexFormat == 0x10307:
-                        uv2 = get_blenderUVCoords(self, bvertex_obj_obj, loop.index, 1)
+                        uv2 = get_blenderUVCoordsEx(self, bvertex_obj_obj, loop.index, "LightMap")
                         uv_maps.append(uv2)
 
                     # Bones
