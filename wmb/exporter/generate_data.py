@@ -1281,7 +1281,12 @@ class c_vertexGroup(object):
                         
 
                     # Whats up guys its gaming with portals, and for my next trick I add named UVs
-                    # UV
+
+                    # Backwards Compatibility Better Than Playstation
+                    if "Float2" in bvertex_obj_obj.data.uv_layers:
+                        bvertex_obj_obj.data.uv_layers["Float2"].name = "UVMap1"
+
+                    # UVs
                     uv_maps = []
                     uv1 = get_blenderUVCoordsEx(self, bvertex_obj_obj, loop.index, "UVMap1")
                     uv_maps.append(uv1)
