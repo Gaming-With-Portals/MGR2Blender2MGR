@@ -8,6 +8,7 @@ import numpy as np
 import mathutils as mu
 from .materials.material import c_material
 from .materials.create_materials import c_materials
+from ..slice_data import *
 
 def getRealName(name):
     splitname = name.split('-')
@@ -121,28 +122,42 @@ class c_batches(object):
                     obj_boneSetIndex = -1
                 
                 batches.append(c_batch(obj, obj_vertexGroupIndex, cur_indexStart, 0, obj_boneSetIndex, cur_numVertexes))
-                if BALLIN:
-                    bpy.data.collections["WMB"]["4-%2d-startIndex" % ballin_index] = 0#batches[-1].indexStart
-                    bpy.data.collections["WMB"]["4-%2d-indexCount" % ballin_index] = batches[-1].numIndexes
-                    bpy.data.collections["WMB"]["4-%2d-startVertex" % ballin_index] = 0#batches[-1].vertexStart
-                    bpy.data.collections["WMB"]["4-%2d-vertexCount" % ballin_index] = batches[-1].numVertexes
-                    bpy.data.collections["WMB"]["4-%2d-A" % ballin_index] = boundingBoxXYZ
-                    bpy.data.collections["WMB"]["4-%2d-B" % ballin_index] = boundingBoxUVW
-                    bpy.data.collections["WMB"]["4-%2d-C" % ballin_index] = obj_vertexGroupIndex
-                    bpy.data.collections["WMB"]["4-%2d-D" % ballin_index] = len(batches) - 1
-                    bpy.data.collections["WMB"]["4-%2d-E" % ballin_index] = 0
-                    bpy.data.collections["WMB"]["4-%2d-E2" % ballin_index] = obj['Materials'][0]
-                    bpy.data.collections["WMB"]["4-%2d-F" % ballin_index] = 1
-                    bpy.data.collections["WMB"]["4-%2d-array" % ballin_index] = []
-                    bpy.data.collections["WMB"]["5-%2d-A"%obj_vertexGroupIndex] = obj_vertexGroupIndex
-                    bpy.data.collections["WMB"]["5-%2d-B"%obj_vertexGroupIndex] = 0
-                    bpy.data.collections["WMB"]["5-%2d-B2"%obj_vertexGroupIndex] = 0
-                    bpy.data.collections["WMB"]["5-%2d-C"%obj_vertexGroupIndex] = -1
-                    bpy.data.collections["WMB"]["5-%2d-C2"%obj_vertexGroupIndex] = 0
-                    add_item_index = 0
-                    while bpy.data.collections["WMB"].get("5-%2d-D-%2d"%(obj_vertexGroupIndex,add_item_index)) is not None:
-                        add_item_index += 1
-                    bpy.data.collections["WMB"]["5-%2d-D-%2d"%(obj_vertexGroupIndex,add_item_index)] = [len(batches) - 1]
+                if BALLIN and obj.get('batchGroup') == 0:
+                    col = bpy.data.collections["WMB"]
+                    
+                    # Keep previously generated array, just add one more sub-array
+                    persist_slice5_array = []
+                    
+                    # Get existing index, or append
+                    if obj_vertexGroupIndex in [x.vertgroup_ind for x in Slice5Data.fetch_section()]:
+                        gen5_ind = [x.vertgroup_ind for x in Slice5Data.fetch_section()].index(obj_vertexGroupIndex)
+                        add_item_index = 0
+                        while "5-%2d-array-%2d"%(gen5_ind,add_item_index) in col:
+                            persist_slice5_array.append(
+                                col["5-%2d-array-%2d"%(gen5_ind,add_item_index)]
+                            )
+                            add_item_index += 1
+                    else:
+                        gen5_ind = len(Slice5Data.fetch_section())
+                    
+                    Slice5Data(
+                        obj_vertexGroupIndex,
+                        0, 0,  # Slice1Data index, suspected
+                        0 if any(k.startswith("3-") for k in col.keys()) else -1, 0,  # Slice3Data (materials) index, suspected
+                        persist_slice5_array + [[ballin_index]]
+                    ).to_collection(gen5_ind)
+                    
+                    Slice4Data(
+                        SVector3(boundingBoxXYZ),
+                        SVector3(boundingBoxUVW),
+                        gen5_ind,  # Slice5Data index
+                        len(batches) - 1,  # Submesh index
+                        0, obj['Materials'][0],
+                        1,
+                        [],
+                        SFaceSet(0, batches[-1].numVertexes, 0, batches[-1].numIndexes)
+                    ).to_collection(ballin_index)
+                    
                     ballin_index += 1
                 cur_indexStart += batches[-1].numIndexes
                 cur_numVertexes = batches[-1].vertexStart + batches[-1].numVertexes
@@ -874,96 +889,116 @@ class c_meshes(object):
 
 class c_mystery(object):
     def __init__(self, mysteryPointer):
-        def mystery1(offset, values):
+        def mystery1(offset):
+            values = Slice1Data.fetch_section()
             mysteryValues = []
             currentOffset = offset
             currentOffset += 8 * len(values)
             if (currentOffset % 16) > 0:
                 currentOffset += 16 - (currentOffset % 16)
-            for vals in values:
-                appendVal = vals
-                appendVal["offsetName"] = currentOffset
-                currentOffset += len(vals["name"]) + 1
+            for data in values:
+                appendVal = {
+                    "offsetName": currentOffset,
+                    "name": data.name,
+                    "parent": data.parent_ind,
+                    "short_6": data.unk_6
+                }
+                currentOffset += len(data.name) + 1
                 mysteryValues.append(appendVal)
             
             return {"size": currentOffset - offset, "content": mysteryValues}
                 
-        def mystery2(offset, values):
+        def mystery2(offset):
+            values = Slice2Data.fetch_section()
             mysteryValues = []
             currentOffset = offset
             currentOffset += 60 * len(values)
-            for vals in values:
-                appendVal = vals
+            for data in values:
+                appendVal = {
+                    "vec_0": data.unk_0,
+                    "flag_C": [data.unk_C, data.unk_E],
+                    "vec_10": data.unk_10,
+                    "flag_1C": [data.unk_1C, data.unk_1E],
+                    "vec_20": data.unk_20,
+                    "flag_2C": [data.unk_2C, data.unk_2E],
+                    "vec_30": data.unk_30
+                }
                 mysteryValues.append(appendVal)
             return {"size": currentOffset - offset, "content": mysteryValues}
                 
-        def mystery3(offset, values):
+        def mystery3(offset):
             # ik ik it's incomprehensible
+            values = Slice3Data.fetch_section()
             mysteryValues = []
             currentOffset = offset
-            vectorGroups = []
-            for i, vals in enumerate(values):
-                vectorGroups.append([])
-                for j in range(len(vals)//6):
-                    vectorGroups[-1].append([[], [], [], [], [], 0])
-                for key, val in vals.items():
-                    splitkey = key.split("-")
-                    j = int(splitkey[0])
-                    k = "ABCDEF".index(splitkey[1])
-                    vectorGroups[i][j][k] = list(val) if k < 5 else int(val)
-                    #print(key)
-                #print(vectorGroups[-1])
-            currentOffset += 8 * len(vectorGroups)
+            currentOffset += 8 * len(values)
             if (currentOffset % 16) > 0:
                 currentOffset += 16 - (currentOffset % 16)
-            for vals in vectorGroups:
-                appendVal = {}
-                appendVal["content"] = vals
-                appendVal["offset"] = currentOffset
-                currentOffset += 64 * len(vals) # 5 vector3's + 1 int/group
+            for data in values:
+                #print(data, data.entries)
+                appendVal = {
+                    "content": [{
+                        "vecs": [dd.unk_0,
+                                 dd.unk_C,
+                                 dd.unk_18,
+                                 dd.unk_24,
+                                 dd.unk_30],
+                        "material": dd.mat_index
+                    } for dd in data.entries],
+                    "offset": currentOffset
+                }
+                currentOffset += 64 * len(data.entries) # 5 vector3's + 1 int/group
                 mysteryValues.append(appendVal)
             return {"size": currentOffset - offset, "content": mysteryValues}
                 
-        def mystery4(offset, values):
+        def mystery4(offset):
+            values = Slice4Data.fetch_section()
             mysteryValues = []
             currentOffset = offset
             currentOffset += 60 * len(values)
-            for vals in values:
-                appendVal = vals
-                appendVal["offset"] = currentOffset if (len(vals["array"]) > 0) else 0
-                currentOffset += 4 * len(vals["array"])
+            for data in values:
+                appendVal = {
+                    "vec_0": data.unk_0,
+                    "vec_C": data.unk_C,
+                    "ref5": data.chunk5_ind,
+                    "refBatch": data.batch_ind,
+                    "short_20": data.unk_20,
+                    "short_22": data.unk_22,
+                    "int_24": data.unk_24,
+                    "array": data.unk_array,
+                    "faces": data.faces,
+                    "offset": currentOffset if (len(data.unk_array) > 0) else 0
+                }
+                currentOffset += 4 * len(data.unk_array)
                 mysteryValues.append(appendVal)
             
             if (currentOffset % 16) > 0:
                 currentOffset += 16 - (currentOffset % 16)
             return {"size": currentOffset - offset, "content": mysteryValues}
                 
-        def mystery5(offset, values):
+        def mystery5(offset):
+            values = Slice5Data.fetch_section()
             mysteryValues = []
             currentOffset = offset
             mysteryD = []
-            newValues = []
-            for vals in values:
-                newValues.append({"D": []})
-                for key, val in vals.items():
-                    splitkey = key.split("-")
-                    if splitkey[0] == "D":
-                        i = int(splitkey[1])
-                        while len(newValues[-1]["D"]) < i + 1:
-                            newValues[-1]["D"].append([])
-                        newValues[-1]["D"][i] = val
-                    else:
-                        newValues[-1][key] = val
-            
-            currentOffset += 20 * len(newValues)
-            for vals in newValues:
-                appendVal = vals
-                appendVal["offset"] = currentOffset
-                currentOffset += 8 * len(vals["D"])
+            currentOffset += 20 * len(values)
+            if (currentOffset % 16) > 0:
+                currentOffset += 16 - (currentOffset % 16)
+            for data in values:
+                appendVal = {
+                    "refVertexGroup": data.vertgroup_ind,
+                    "ref1": data.chunk1_ind,
+                    "short_6": data.unk_6,
+                    "ref3": data.chunk3_ind,
+                    "short_A": data.unk_A,
+                    "array": data.unk_array,
+                    "offset": currentOffset,
+                    "offsetTwo": []
+                }
+                currentOffset += 8 * len(data.unk_array)
                 if (currentOffset % 16) > 0:
                     currentOffset += 16 - (currentOffset % 16)
-                appendVal["offsetTwo"] = []
-                for nums in vals["D"]:
+                for nums in data.unk_array:
                     appendVal["offsetTwo"].append(currentOffset)
                     currentOffset += 2 * len(nums)
                     if (currentOffset % 16) > 0:
@@ -971,63 +1006,93 @@ class c_mystery(object):
                 mysteryValues.append(appendVal)
             return {"size": currentOffset - offset, "content": mysteryValues}
                 
-        def mystery6(offset, values):
+        def mystery6(offset):
+            values = Slice6Data.fetch_section()
             mysteryValues = []
             currentOffsetA = offset
             currentOffsetA += 16 * len(values)
             currentOffsetB = currentOffsetA
-            for vals in values:
-                currentOffsetB += 4 * len(vals["A"])
-            for vals in values:
-                appendVal = vals
-                appendVal["offsetA"] = currentOffsetA
-                currentOffsetA += 4 * len(vals["A"]) # float
-                appendVal["offsetB"] = currentOffsetB
-                currentOffsetB += 2 * len(vals["B"]) # short
+            for data in values:
+                currentOffsetB += 16 * len(data.data.vertexes)
+            for data in values:
+                appendVal = {
+                    "vertexes": data.data.vertexes,
+                    "faces": data.data.faces,
+                    "offsetVert": currentOffsetA,
+                    "offsetFace": currentOffsetB
+                }
+                currentOffsetA += 16 * len(data.data.vertexes) # vec4
+                currentOffsetB += 2 * len(data.data.faces) # short
                 mysteryValues.append(appendVal)
             return {"size": currentOffsetB - offset, "content": mysteryValues}
                 
-        def mystery7(offset, values):
+        def mystery7(offset):
+            values = Slice7Data.fetch_section()
             mysteryValues = []
             currentOffset = offset
             currentOffset += 48 * len(values)
-            for vals in values:
-                appendVal = vals
+            for data in values:
+                appendVal = {
+                    "vec_0": data.unk_0,
+                    "vec_C": data.unk_C,
+                    "ref6": data.chunk6_ind,
+                    "float_1C": data.unk_1C,
+                    "faces": data.faces
+                }
                 mysteryValues.append(appendVal)
             return {"size": currentOffset - offset, "content": mysteryValues}
                 
-        def mystery8(offset, values):
+        def mystery8(offset):
+            values = Slice8Data.fetch_section()
             mysteryValues = []
             currentOffset = offset
             currentOffset += 88 * len(values)
-            for vals in values:
-                appendVal = vals
+            for data in values:
+                appendVal = {
+                    "vec_0": data.unk_0,
+                    "vec_10": data.unk_10,
+                    "vec_20": data.unk_20,
+                    "vec_30": data.unk_30,
+                    "ref1": data.chunk1_ind,
+                    "float_40": data.unk_40,
+                    "float_44": data.unk_44,
+                    "short_48": data.unk_48,
+                    "short_4A": data.unk_4A,
+                    "int_4C": data.unk_4C,
+                    "ref7": data.chunk7_ind,
+                    "int_54": data.unk_54
+                }
                 mysteryValues.append(appendVal)
             return {"size": currentOffset - offset, "content": mysteryValues}
                 
-        def mystery9(offset, values):
+        def mystery9(offset):
+            values = Slice9Data.fetch_section()
             mysteryValues = []
             currentOffset = offset
             currentOffset += 12 * len(values)
-            for vals in values:
-                appendVal = vals
+            for data in values:
+                appendVal = {
+                    "short_0": data.unk_0,
+                    "parent": data.parent,
+                    "ref8": data.chunk8_ind,
+                    "short_6": data.unk_6,
+                    "int_8": data.unk_8
+                }
                 mysteryValues.append(appendVal)
             return {"size": currentOffset - offset, "content": mysteryValues}
                 
         
-        blendervals = [[], [], [], [], [], [], [], [], []]
+        mysteryCounts = [0] * 9
         for key, value in bpy.data.collections['WMB'].items():
             if key[0].isnumeric():
                 splitkey = key.split("-")
                 i = int(splitkey.pop(0)) - 1
                 j = int(splitkey.pop(0))
-                while len(blendervals[i]) < j + 1:
-                    blendervals[i].append({})
-                shortname = "-".join(splitkey)
-                blendervals[i][j][shortname] = value
+                if mysteryCounts[i] < j + 1:
+                    mysteryCounts[i] = j + 1
         
         self.mysteryOffsets = [0] * 9
-        self.mysteryCounts = [len(x) for x in blendervals]
+        self.mysteryCounts = mysteryCounts
         self.mysterySizes = [0] * 9
         self.mystery = []
         mysteryFuncs = [mystery1, mystery2, mystery3, mystery4, mystery5, mystery6, mystery7, mystery8, mystery9]
@@ -1038,7 +1103,7 @@ class c_mystery(object):
                     self.mysteryOffsets[i] += 16 - (self.mysteryOffsets[i] % 16)
             else:
                 self.mysteryOffsets[i] = self.mysteryOffsets[i-1] + self.mysterySizes[i-1]
-            self.mystery.append(mysteryFuncs[i](self.mysteryOffsets[i], blendervals[i]))
+            self.mystery.append(mysteryFuncs[i](self.mysteryOffsets[i]))
             self.mysterySizes[i] = self.mystery[i]["size"]
         for i in range(9):
             if self.mysteryCounts[i] == 0:
@@ -1671,45 +1736,68 @@ class c_generate_data(object):
             for key in list(bpy.data.collections["WMB"].keys()):
                 if key[:1].isnumeric() and not key[:1] == "3":
                     del bpy.data.collections["WMB"][key]
-            bpy.data.collections["WMB"]["1- 0-B"] = -1
-            bpy.data.collections["WMB"]["1- 0-name"] = "CG_DEFAULT"
-            bpy.data.collections["WMB"]["1- 0-parent"] = -1
-            # group 4 defined dynamically
-            # group 5 defined dynamically
-            # bpy.data.collections["WMB"]["5- 0-A"] = 0
-            # bpy.data.collections["WMB"]["5- 0-B"] = 0
-            # bpy.data.collections["WMB"]["5- 0-B2"] = -1
-            # bpy.data.collections["WMB"]["5- 0-C"] = 0
-            # bpy.data.collections["WMB"]["5- 0-C2"] = 0
-            # bpy.data.collections["WMB"]["5- 0-D- 0"] = []
+            # Most default value here possible
+            Slice1Data.store_section([Slice1Data()])
+            
+            # Slice4Data defined dynamically
+            # Slice5Data defined dynamically
+            
             boundingBoxXYZ, boundingBoxUVW = getGlobalBoundingBox()
             minX, maxX = boundingBoxXYZ[0] - boundingBoxUVW[0], boundingBoxXYZ[0] + boundingBoxUVW[0]
             minY, maxY = boundingBoxXYZ[1] - boundingBoxUVW[1], boundingBoxXYZ[1] + boundingBoxUVW[1]
             minZ, maxZ = boundingBoxXYZ[2] - boundingBoxUVW[2], boundingBoxXYZ[2] + boundingBoxUVW[2]
-            bpy.data.collections["WMB"]["6- 0-A"] = [minX, minY, minZ, 1.0, maxX, minY, maxZ, 1.0, minX, minY, maxZ, 1.0, maxX, minY, minZ, 1.0] \
-                                                  + [maxX, maxY, minZ, 1.0, minX, maxY, minZ, 1.0, minX, maxY, maxZ, 1.0, maxX, maxY, maxZ, 1.0]
-            bpy.data.collections["WMB"]["6- 0-B"] = [0, 1, 2, 0, 3, 1, 0, 4, 3, 0, 5, 4, 0, 6, 5, 0, 2, 6, 3, 7, 1, 3, 4, 7, 2, 7, 6, 2, 1, 7, 5, 7, 4, 5, 6, 7]
-            bpy.data.collections["WMB"]["7- 0-A"] = [0.0, 0.0, 0.0] # offset for chunk 6 coordinates
-            bpy.data.collections["WMB"]["7- 0-B"] = [0.25, 0.25, 0.25] # idk a scale factor or something
-            bpy.data.collections["WMB"]["7- 0-C"] = 0
-            bpy.data.collections["WMB"]["7- 0-D"] = 0.3
-            bpy.data.collections["WMB"]["7- 0-startIndex"] = 0
-            bpy.data.collections["WMB"]["7- 0-startVertex"] = 0
-            bpy.data.collections["WMB"]["7- 0-indexCount"] = 36
-            bpy.data.collections["WMB"]["7- 0-vertexCount"] = 8
-            bpy.data.collections["WMB"]["8- 0-vectors"] = [0.0, -0.025317, 0.004611] + [1.0, 0.0, 0.0] + [0.0, 1.0, 0.0] + [0.0, 0.0, 1.0] + [0.277, 0.230695, 0.273966]
-            bpy.data.collections["WMB"]["8- 0-A"] = 0 # cut group index
-            bpy.data.collections["WMB"]["8- 0-B"] = [1.0, 0.3] #
-            bpy.data.collections["WMB"]["8- 0-C"] = 1 # always 1
-            bpy.data.collections["WMB"]["8- 0-D"] = 0 # always 0
-            bpy.data.collections["WMB"]["8- 0-E"] = 0 # always 0
-            bpy.data.collections["WMB"]["8- 0-F"] = 0 # a more orderly index, probably for 7
-            bpy.data.collections["WMB"]["8- 0-G"] = 1 # always 1
-            bpy.data.collections["WMB"]["9- 0-A"] = 0 # or -1?
-            bpy.data.collections["WMB"]["9- 0-parent"] = -1 # parent
-            bpy.data.collections["WMB"]["9- 0-C"] = 0 # index in 8?
-            bpy.data.collections["WMB"]["9- 0-D"] = 1 # amount of 8 groups
-            bpy.data.collections["WMB"]["9- 0-E"] = 1 # or 0, doesn't seem to matter
+            Slice6Data.store_section([Slice6Data(SGeometry(
+                # Vertexes (SVector4)
+                [SVector4(minX, minY, minZ),
+                 SVector4(maxX, minY, maxZ),
+                 SVector4(minX, minY, maxZ),
+                 SVector4(maxX, minY, minZ),
+                 SVector4(maxX, maxY, minZ),
+                 SVector4(minX, maxY, minZ),
+                 SVector4(minX, maxY, maxZ),
+                 SVector4(maxX, maxY, maxZ)],
+                # Face indexes
+                [0, 1, 2,
+                 0, 3, 1,
+                 0, 4, 3,
+                 0, 5, 4,
+                 0, 6, 5,
+                 0, 2, 6,
+                 3, 7, 1,
+                 3, 4, 7,
+                 2, 7, 6,
+                 2, 1, 7,
+                 5, 7, 4,
+                 5, 6, 7]
+            ))])
+            
+            Slice7Data.store_section([Slice7Data(
+                SVector3(0.0, 0.0, 0.0),  # offset for Slice6Data coordinates
+                SVector3(0.25, 0.25, 0.25),  # idk a scale factor or something
+                0,  # Slice6Data index
+                0.3,
+                SFaceSet(0, 8, 0, 36)
+            )])
+            
+            Slice8Data.store_section([Slice8Data(
+                SVector4(0.0, -0.025317, 0.004611),
+                SVector4(0.0, 0.0, 0.0),
+                SVector4(0.0, 0.0, 0.0),
+                SVector3(0.277, 0.230695, 0.273966),
+                0,  # Slice1Data index
+                1.0, 0.3,
+                # Several default values...
+                chunk7_ind = 0
+            )])
+            
+            Slice9Data.store_section([Slice9Data(
+                0,  # or -1?
+                -1,  # parent (I think)
+                0,  # index in Slice8Data?
+                1,  # amount of referenced Slice8Data groups
+                1  # 0 may be acceptable here
+            )])
+            
             # IF YOU CAN SLICE SIX FEET IN THE AIR STRAIGHT UP AND NOT CRASH THE GAME,
             # YOU GET NO DOWN PAYMENT
 

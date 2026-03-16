@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from math import atan, tan
-from typing import Callable
+from typing import Callable, List
 import bpy
 from mathutils import Vector
 
@@ -105,14 +105,30 @@ def getCameraTarget(constructIfMissing: bool) -> bpy.types.Object|None:
 	collection.objects.link(target)
 	return target
 
+def getAllObjectFCurves(action: bpy.types.Action) -> List[bpy.types.FCurve]:
+	# Old versions didn't have an action system that needed combining
+	if bpy.app.version < (4, 4):
+		return list(action.fcurves)
+	
+	# 4.4+ behavior
+	fcurves = []
+	for layer in action.layers:
+		for strip in layer.strips:
+			for bag in strip.channelbags:
+				for curve in bag.fcurves:
+					fcurves.append(curve)
+	return fcurves
+
 def getBoneFCurve(armatureObj: bpy.types.Object, bone: bpy.types.PoseBone, property: str, index: int) -> bpy.types.FCurve:
-	for fCurve in armatureObj.animation_data.action.fcurves:
+	fcurves = getAllObjectFCurves(armatureObj.animation_data.action)
+	for fCurve in fcurves:
 		if fCurve.data_path == f"pose.bones[\"{bone.name}\"].{property}" and fCurve.array_index == index:
 			return fCurve
 	return None
 
 def getObjFCurve(obj: bpy.types.Object, property: str, index: int) -> bpy.types.FCurve:
-	for fCurve in obj.animation_data.action.fcurves:
+	fcurves = getAllObjectFCurves(obj.animation_data.action)
+	for fCurve in fcurves:
 		if fCurve.data_path == property and fCurve.array_index == index:
 			return fCurve
 	return None
@@ -146,12 +162,14 @@ def hermitVecToBezierVec(vec: Vector) -> Vector:
 def alignTo4(num: int) -> int:
 	return (num + 3) & ~3
 
+# https://github.com/blender/blender/blob/main/source/blender/blenlib/intern/math_rotation_c.cc#L2311
 def fovToFocalLength(camData, fovRad: float) -> float:
-	fovRad *=  16 / 9
-	sensorSize = max(camData.sensor_width, camData.sensor_height)
-	return sensorSize / (2 * tan(fovRad / 2))
+    sensor = camData.sensor_width
+    return (sensor / 2.0) / tan(fovRad)
 
+# MGR stores FOV in a different way than expected, it's doing half-size, instead of the full size
+# so the operations need to export it without any multiplication
+# https://github.com/blender/blender/blob/main/source/blender/blenlib/intern/math_rotation_c.cc#L2306
 def focalLengthToFov(camData, focalLength: float) -> float:
-	sensorSize = max(camData.sensor_width, camData.sensor_height)
-	fovRad = 2 * atan(sensorSize / (2 * focalLength))
-	return fovRad / 16 * 9
+    sensor = camData.sensor_width
+    return atan((sensor / 2.0) / focalLength)

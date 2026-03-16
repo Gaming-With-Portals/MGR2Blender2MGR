@@ -3,7 +3,7 @@ from mathutils import Vector
 import re
 import os
 from typing import Callable, List
-from ..common.motUtils import KeyFrame, Spline, focalLengthToFov, getArmatureObject, getCameraObject, getCameraTarget, cameraId, camTargetId
+from ..common.motUtils import KeyFrame, Spline, focalLengthToFov, getArmatureObject, getCameraObject, getCameraTarget, cameraId, camTargetId, getAllObjectFCurves
 from ..common.mot import MotFile, MotHeader, MotRecord, MotInterpolValues, MotInterpolSplines
 
 class AnimationObject:
@@ -16,9 +16,10 @@ class AnimationObject:
 	valueOffset: float
 
 def getAllAnimationObjects(obj: bpy.types.Object) -> List[AnimationObject]:
-	curves = list(obj.animation_data.action.fcurves)
+	curves = getAllObjectFCurves(obj.animation_data.action)
 	if obj.type == "CAMERA":
-		curves.extend(obj.data.animation_data.action.fcurves)
+		curves.extend(getAllObjectFCurves(obj.data.animation_data.action))
+	
 	animObjs: List[AnimationObject] = []
 	for curve in curves:
 		animObj = AnimationObject()
@@ -186,7 +187,7 @@ def makeRecords(
 		
 		records.append(record)
 
-	return records
+	return sorted(records, key=lambda record: record.boneIndex)  # F-Curve fix by Aura
 
 def addAdditionPatchRecords(path: str, currentRecords: List[MotRecord]):
 	with open(path, "rb") as f:
